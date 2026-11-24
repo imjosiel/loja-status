@@ -1,0 +1,227 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { ArrowLeft, Search, Sparkles } from "lucide-react";
+
+import { formatBRL } from "@/lib/money";
+import type { AdminProductRow } from "@/lib/productStore";
+
+import { ArchiveProductButton } from "./ArchiveProductButton";
+import { DeleteProductButton } from "./DeleteProductButton";
+import { ProductDrawer } from "./ProductDrawer";
+
+const PANEL =
+  "rounded-[20px] border border-[#E4DCC8] bg-white shadow-[0_8px_28px_-20px_rgba(20,16,14,0.28)]";
+const PAGE_SIZE = 20;
+
+export function AdminProductsClient({ products }: { products: AdminProductRow[] }) {
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const [selected, setSelected] = useState<AdminProductRow | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+
+  const listed = useMemo(
+    () => (showArchived ? products : products.filter((product) => !product.archived)),
+    [products, showArchived]
+  );
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return listed;
+    return listed.filter(
+      (product) =>
+        product.name.toLowerCase().includes(term) ||
+        product.categoryName.toLowerCase().includes(term) ||
+        product.variants.some((variant) => variant.colorName.toLowerCase().includes(term))
+    );
+  }, [listed, query]);
+
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, pages - 1);
+  const visible = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+
+  return (
+    <div className="mx-auto max-w-5xl">
+      <div className={`${PANEL} flex flex-wrap items-center justify-between gap-3 px-5 py-4`}>
+        <div>
+          <p className="text-[10px] font-semibold tracking-[0.18em] text-[#2B4538] uppercase">
+            Status Store · Admin
+          </p>
+          <h1 className="mt-1 font-serif text-2xl font-semibold text-[#12100C]">Produtos</h1>
+          <p className="mt-0.5 text-[11px] text-[#6E6858]">
+            {products.filter((product) => !product.archived).length} ativas ·{" "}
+            {products.filter((product) => product.archived).length} arquivadas · clique numa linha
+            para editar preço, estoque e fotos.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/produtos/novo"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#2B4538] px-4 py-2 text-[11px] font-semibold text-white transition-transform hover:-translate-y-0.5"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Nova peça
+          </Link>
+          <Link
+            href="/admin"
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#E4DCC8] px-4 py-2 text-[11px] font-semibold text-[#4A463A] transition-colors hover:text-[#12100C]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Visão geral
+          </Link>
+        </div>
+      </div>
+
+      <div className={`${PANEL} mt-4 overflow-hidden`}>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E8DCC6] p-4">
+          <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-xl border border-[#E4DCC8] bg-white px-3 py-2">
+            <Search className="h-4 w-4 text-[#6E6858]" />
+            <input
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(0);
+              }}
+              placeholder="Buscar por peça, categoria ou cor"
+              className="w-full bg-transparent text-sm text-[#12100C] outline-none placeholder:text-[#9A927E]"
+            />
+          </label>
+          <label className="flex shrink-0 cursor-pointer items-center gap-2 text-[11px] font-semibold text-[#4A463A]">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(event) => {
+                setShowArchived(event.target.checked);
+                setPage(0);
+              }}
+              className="h-4 w-4 accent-copper"
+            />
+            Ver arquivadas
+          </label>
+          <span className="tabular-price text-[11px] text-[#6E6858]">
+            {filtered.length === 0
+              ? "Nenhuma peça"
+              : `${safePage * PAGE_SIZE + 1}–${Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} de ${filtered.length}`}
+          </span>
+        </div>
+
+        {visible.length === 0 ? (
+          <p className="p-10 text-center text-sm text-[#6E6858]">Nenhuma peça encontrada.</p>
+        ) : (
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-[#E8DCC6] bg-[#FBF8F0] text-[10px] font-semibold tracking-wider text-[#6E6858] uppercase">
+              <tr>
+                <th className="px-4 py-3">Peça</th>
+                <th className="px-4 py-3">Categoria</th>
+                <th className="px-4 py-3 text-right">Preço</th>
+                <th className="px-4 py-3 text-right">Custo</th>
+                <th className="px-4 py-3 text-right">Estoque</th>
+                <th className="px-4 py-3 text-right">Comissão</th>
+                <th className="px-4 py-3">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#EFE9DC]">
+              {visible.map((product) => {
+                const totalStock = product.variants.reduce(
+                  (sum, variant) => sum + variant.stocks.reduce((s, st) => s + st.stock, 0),
+                  0
+                );
+                const margin = product.priceInCents - product.costInCents;
+                const commission = Math.round(
+                  margin > 0 ? (margin * 1000) / 10000 : 0
+                );
+                const low = totalStock <= 5;
+
+                return (
+                  <tr
+                    key={product.slug}
+                    onClick={() => setSelected(product)}
+                    className="cursor-pointer transition-colors hover:bg-[#FBF8F0]"
+                  >
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-3">
+                        <div className="relative h-10 w-9 shrink-0 overflow-hidden rounded-md bg-[#F4F0E6]">
+                          <Image
+                            src={product.imageUrl}
+                            alt=""
+                            fill
+                            sizes="36px"
+                            className="object-contain"
+                            unoptimized
+                          />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium text-[#12100C]">{product.name}</span>
+                          {product.archived && (
+                            <span className="rounded-full bg-[#EFE9DC] px-2 py-0.5 text-[9px] font-semibold text-[#6E6858]">
+                              Arquivada
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-[#4A463A]">{product.categoryName}</td>
+                    <td className="tabular-price px-4 py-2.5 text-right text-[#12100C]">
+                      {formatBRL(product.priceInCents)}
+                    </td>
+                    <td className="tabular-price px-4 py-2.5 text-right text-[#4A463A]">
+                      {formatBRL(product.costInCents)}
+                    </td>
+                    <td className="tabular-price px-4 py-2.5 text-right">
+                      <span className={low ? "font-semibold text-[#2B4538]" : "text-[#12100C]"}>
+                        {totalStock}
+                      </span>
+                    </td>
+                    <td className="tabular-price px-4 py-2.5 text-right font-semibold text-[#2B4538]">
+                      {formatBRL(commission)}
+                    </td>
+                    <td
+                      className="px-4 py-2.5 text-right"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        <ArchiveProductButton
+                          slug={product.slug}
+                          mode={product.archived ? "restore" : "archive"}
+                        />
+                        <DeleteProductButton slug={product.slug} />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+
+        {pages > 1 && (
+          <div className="flex items-center justify-between gap-3 border-t border-[#E8DCC6] p-4">
+            <button
+              type="button"
+              disabled={safePage === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              className="cursor-pointer rounded-full border border-[#E4DCC8] px-4 py-2 text-[11px] font-semibold text-[#4A463A] disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <span className="tabular-price text-[11px] text-[#6E6858]">
+              Página {safePage + 1} de {pages}
+            </span>
+            <button
+              type="button"
+              disabled={safePage >= pages - 1}
+              onClick={() => setPage((p) => p + 1)}
+              className="cursor-pointer rounded-full border border-[#E4DCC8] px-4 py-2 text-[11px] font-semibold text-[#4A463A] disabled:opacity-40"
+            >
+              Próxima
+            </button>
+          </div>
+        )}
+      </div>
+
+      {selected && <ProductDrawer product={selected} onClose={() => setSelected(null)} />}
+    </div>
+  );
+}

@@ -1,0 +1,211 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  HardDrive,
+  LayoutDashboard,
+  ListFilter,
+  Menu,
+  Package,
+  ShoppingBag,
+  ShoppingCart,
+  Store,
+  UserPlus,
+  Users,
+  Wallet,
+  X,
+} from "lucide-react";
+
+import { signOutFromAdmin } from "@/auth-actions";
+import { preloadCutout } from "@/lib/cutout";
+import { visibleAdminLinks } from "./admin-links";
+
+/** Card com contraste maior: fundo quente do lado de fora, superfície branca por dentro. */
+export const PANEL =
+  "rounded-[20px] border border-[#E4DCC8] bg-white shadow-[0_8px_28px_-20px_rgba(20,16,14,0.28)]";
+
+/** Texto do painel: preto quente, não marrom. */
+export const INK = "text-[#12100C]";
+export const INK_SOFT = "text-[#4A463A]";
+export const INK_MUTED = "text-[#6E6858]";
+
+const LINKS = [
+  { href: "/admin", label: "Visão geral", icon: LayoutDashboard },
+  { href: "/admin/pdv", label: "Venda na loja", icon: ShoppingCart },
+  { href: "/admin/pedidos", label: "Pedidos", icon: ShoppingBag },
+  { href: "/admin/clientes", label: "Clientes", icon: Users },
+  { href: "/admin/financeiro", label: "Financeiro", icon: Wallet },
+  { href: "/admin/produtos", label: "Produtos", icon: Package },
+  { href: "/admin/categorias", label: "Categorias", icon: ListFilter },
+  { href: "/admin/usuarios", label: "Administradores", icon: UserPlus },
+  { href: "/admin/armazenamento", label: "Armazenamento", icon: HardDrive },
+];
+
+export function AdminShell({
+  children,
+  isSuperAdmin,
+}: {
+  children: React.ReactNode;
+  isSuperAdmin: boolean;
+}) {
+  const pathname = usePathname();
+  const links = visibleAdminLinks(LINKS, isSuperAdmin);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    void preloadCutout();
+  }, []);
+
+  return (
+    <div className="relative min-h-screen bg-[#F7F1E6] text-[#12100C]">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at 10% 6%, rgba(197,143,112,0.14), transparent 38%), radial-gradient(circle at 88% 14%, rgba(228,208,188,0.45), transparent 42%), radial-gradient(circle at 72% 92%, rgba(168,111,80,0.08), transparent 40%)",
+        }}
+      />
+
+      <div className="relative flex min-h-screen">
+        {menuOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <button
+              type="button"
+              aria-label="Fechar menu"
+              onClick={() => setMenuOpen(false)}
+              className="absolute inset-0 h-full w-full cursor-default bg-[#1A1512]/40 backdrop-blur-[2px]"
+            />
+            <div className={`${PANEL} absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col p-5`}>
+              <div className="flex items-start justify-between border-b border-[#E8DCC6] pb-5">
+                <div>
+                  <p className="font-serif text-2xl font-semibold leading-none">Status</p>
+                  <p className="mt-1 font-serif text-xs tracking-[0.22em] text-copper uppercase">
+                    Store
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen(false)}
+                  aria-label="Fechar menu"
+                  className="cursor-pointer rounded-full border border-[#E4DCC8] p-2 text-[#4A463A]"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <nav className="mt-6 space-y-1" aria-label="Navegação administrativa">
+                {links.map(({ href, label, icon: Icon }) => {
+                  const active = pathname === href;
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={() => setMenuOpen(false)}
+                      aria-current={active ? "page" : undefined}
+                      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs transition-colors ${
+                        active
+                          ? "bg-[#14120C] font-semibold text-cream"
+                          : "font-medium text-[#4A463A] hover:bg-sand/60 hover:text-[#12100C]"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" strokeWidth={1.8} />
+                      {label}
+                    </Link>
+                  );
+                })}
+                <Link
+                  href="/"
+                  onClick={() => setMenuOpen(false)}
+                  className="mt-2 flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-medium text-[#4A463A] hover:bg-sand/60"
+                >
+                  <Store className="h-4 w-4" strokeWidth={1.8} />
+                  Ver loja
+                </Link>
+              </nav>
+
+              <div className="mt-auto">
+                <form action={signOutFromAdmin}>
+                  <button
+                    type="submit"
+                    className="w-full cursor-pointer rounded-xl border border-[#E4DCC8] px-3 py-2 text-[11px] font-semibold text-[#4A463A]"
+                  >
+                    Sair da conta
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col p-4 lg:flex">
+          <div className={`${PANEL} flex h-full flex-col p-5`}>
+            <div className="border-b border-[#E8DCC6] pb-5">
+              <p className="font-serif text-2xl font-semibold leading-none">Status</p>
+              <p className="mt-1 font-serif text-xs tracking-[0.22em] text-copper uppercase">
+                Store
+              </p>
+            </div>
+
+            <nav className="mt-6 space-y-1" aria-label="Navegação administrativa">
+              {links.map(({ href, label, icon: Icon }) => {
+                const active = pathname === href;
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-current={active ? "page" : undefined}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs transition-colors ${
+                      active
+                        ? "bg-[#14120C] font-semibold text-cream"
+                        : "font-medium text-[#4A463A] hover:bg-sand/60 hover:text-[#12100C]"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" strokeWidth={1.8} />
+                    {label}
+                  </Link>
+                );
+              })}
+              <Link
+                href="/"
+                className="mt-2 flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-medium text-[#4A463A] transition-colors hover:bg-sand/60 hover:text-[#12100C]"
+              >
+                <Store className="h-4 w-4" strokeWidth={1.8} />
+                Ver loja
+              </Link>
+            </nav>
+
+            <div className="mt-auto">
+              <form action={signOutFromAdmin}>
+                <button
+                  type="submit"
+                  className="w-full cursor-pointer rounded-xl border border-[#E4DCC8] px-3 py-2 text-[11px] font-semibold text-[#4A463A] transition-colors hover:border-copper hover:text-[#12100C]"
+                >
+                  Sair da conta
+                </button>
+              </form>
+            </div>
+          </div>
+        </aside>
+
+        <main className="min-w-0 flex-1 px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
+          <div className="mb-4 flex items-center justify-between lg:hidden">
+            <button
+              type="button"
+              onClick={() => setMenuOpen(true)}
+              aria-label="Abrir menu"
+              className={`${PANEL} inline-flex cursor-pointer items-center gap-2 px-4 py-2 text-xs font-semibold text-[#12100C]`}
+            >
+              <Menu className="h-4 w-4" />
+              Menu
+            </button>
+            <span className="font-serif text-lg font-semibold text-[#12100C]">Status Store</span>
+          </div>
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}

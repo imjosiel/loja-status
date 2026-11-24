@@ -1,0 +1,93 @@
+# 10 — Banco (Neon / Prisma)
+
+## Estado (Fase 2 em andamento)
+
+- Projeto Neon: `ancient-sky-34341454`, branch `production`, região AWS US East 2.
+- PostgreSQL 18, banco `neondb`, role `neondb_owner`.
+- Schema aplicado com `prisma migrate dev --name init` → `prisma/migrations/<ts>_init/`.
+- Catálogo cadastrado diretamente no banco (5 categorias, 6 produtos, 11 variações, 40 estoques). Não existe mais arquivo de seed nem catálogo mock.
+- Endpoint de prova: `GET /api/health` → contagens do banco.
+
+## Env vars
+
+`.env.local` e `.env` (ambos ignorados pelo git):
+
+```env
+DATABASE_URL=postgresql://...@...-pooler.../neondb?...pgbouncer=true...
+DIRECT_URL=postgresql://...@....../neondb?...
+```
+
+- `DATABASE_URL` = connection string **pooled** (pooler da Neon, com `pgbouncer=true`).
+- `DIRECT_URL` = conexão **direta**, usada pelo Prisma para migrations.
+
+`.env.example` traz os placeholders. Na **Vercel** é preciso cadastrar manualmente:
+`DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`,
+`AUTH_*` — e atualizar as URIs do cliente OAuth para o domínio real. Não há mais variáveis de admin: a primeira conta que loga vira super admin.
+
+## Comandos
+
+```bash
+npx prisma validate
+npx prisma migrate dev --name <nome>
+npm run verify
+```
+
+## Notas
+
+- Prisma fixado em **6.19.3**: a 8 é RC com CLI incompatível, e a 7 exigiria migrar o gerador
+  `prisma-client-js` para `prisma-client`. Reavaliar quando a 8 estabilizar.
+- `npm audit` reporta 4 avisos `high` em `effect`, dependência **apenas do CLI de desenvolvimento**
+  (`prisma → @prisma/config → effect`). Não entra no bundle de produção (`@prisma/client`).
+- Fotos enviadas pelo ERP em **Cloudflare R2** (fora do repositório): campo "Trocar imagem" em cada cor, em `/admin/produtos`. Requer `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` e `R2_PUBLIC_URL` na Vercel; `next.config.ts` autoriza o hostname de `R2_PUBLIC_URL`.
+- O fundo da foto é removido **no navegador** por `@imgly/background-removal` (modelo `isnet_quint8`) antes do upload, gerando WebP com alpha. A cor da amostra é inferida do recorte — isso é comportamento do sistema, não texto para a interface.
+- O modelo é **pré-carregado ao abrir qualquer página do admin** (`preloadCutout` na layout), para que o primeiro upload não espere o download dos ~40 MB. O cache fica no navegador; o preload é chamado uma vez por sessão.
+- Upload acontece ao salvar a cor ou ao criar uma peça; não existe botão de "enviar imagem" separado.
+
+## Convenção de texto da interface
+
+Detalhes de implementação **não aparecem na tela** — ficam apenas neste documento e no `docs/07`. A interface fala de peça, cor, tamanho e preço; não menciona R2, upload, modelo de IA, "regra de ouro" nem prazos de comissão. Isso evita vazar arquitetura para quem usa o ERP e evita textos desatualizados quando a infra muda.
+- Cota por loja em `StorageSetting` (padrão **1 GB**), ajustável pelo super admin em `/admin/armazenamento`. O upload soma os tamanhos dos objetos via `ListObjectsV2` e bloqueia se estourar o limite. As 11 imagens antigas em `public/products/` seguem como fallback.
+- **Clientes (migration `20261123192629_customers`):** `Customer` guarda nome, CPF/CNPJ (somente
+  dígitos, `@unique`), telefone, e-mail e `asaasCustomerId`. `Order.customerId` é opcional para
+  não quebrar pedidos antigos. `findOrCreateCustomer` evita duplicatas no Asaas; a interface
+  `/admin/clientes` mostra o documento **mascarado** (`maskDocument`), nunca completo. CPF é dado
+  pessoal sensível (LGPD): não aparece em log nem em relatório, e a política em `/politicas` deve
+  cobrir esse tratamento.
+- **Checkout/Asaas:** `CheckoutSetting` (singleton, migration `20261123171622_checkout_settings`)
+  guarda `pixGatewayEnabled` (default `false`), `whatsappEnabled` (default `true`) e
+  `preferredMethod` (default `WHATSAPP`). `Order.gatewayPaymentId` guarda a cobrança. Cliente em
+  `src/lib/asaas.ts`, action em `src/checkout-actions.ts`, webhook em
+  `/api/webhooks/asaas`. Credenciais ficam só em variáveis de ambiente (`.env.example`);
+  nunca no banco nem na interface.
+- **Regras e pós-venda:** `CommissionSetting` (singleton) guarda `onlineGraceDays`,
+  `storeGraceDays` e `commissionBps`, editáveis só pelo super admin em
+  `/admin/financeiro/regras`; `confirmOrderInDb` e `createPosOrder` leem esses valores na criação.
+  `PostSaleEvent` registra troca/devolução/defeito com motivo, autor e efeitos (estoque, estorno,
+  comissão); gera `FinancialEvent` e leva o pedido a `RETURNED`. Migration
+  `20261122193620_commission_settings_and_post_sale`.
+- **Carrinho do PDV:** `createPosOrder` recebe `items[]` e grava todos os `OrderItem` de uma vez
+  num pedido só; estoque é baixado item a item na mesma transação e qualquer falha faz rollback.
+  O resumo da tela usa a alíquota vinda de `CommissionSetting`.
+- **PDV:** `/admin/pdv` cria venda presencial com `createPosOrder` (`src/lib/orderStore.ts`):
+  pedido `CONFIRMED` com `channel: LOJA`, estoque baixado com `updateMany` condicional
+  (`stock >= quantidade`), código `MS-xxxx` gerado fora da transação (evita timeout do Prisma)
+  e evento `PAYMENT_RECEIVED` na mesma escrita. Nunca vende sem estoque.
+- **Venda e dinheiro:** `Order.channel` (`ONLINE`/`LOJA`, default `ONLINE`) e `Order.paymentMethod`
+  discriminam a origem e a forma de pagamento. `FinancialEvent` guarda recebimentos, repasses e
+  estornos (com `externalId` único para idempotência, valor, taxa, parte da loja e comprovante).
+  O relatório do super admin fica em `/admin/financeiro` e usa `src/domain/financial.ts`.
+  A migração é `20261122183808_sale_channel_and_financial_events`. Eventos escritos por webhook
+  do gateway vão atualizar `Order.commissionStatus` (`COMMISSION_PAID` → `PAID`,
+  `COMMISSION_REFUNDED` → `REVERSED`); hoje são manuais.
+- **Arquivamento e exclusão de peças:** `Product.archivedAt` (migration `20261122003921_archive_products`). "Arquivar" tira a peça da vitrine (`getProductsFromDb` filtra `archivedAt: null`) e da lista padrão do ERP, preservando `Product`, variações, estoque, `OrderItem`, NF e comissão; a lista tem "Ver arquivadas" para reativar. "Excluir" é definitivo: apaga o produto (variações e estoques por cascade) e também os `OrderItem` da peça — obrigatório porque `OrderItem.productId` não tem `onDelete: Cascade`. Pedidos, totais, NF e comissão permanecem, mas o detalhe da peça vendida sai desses pedidos. As duas ações pedem confirmação na interface e funcionam mesmo para peças que já venderam.
+- `/admin/produtos` edita **preço, custo e estoque por cor/tamanho** no banco e `/admin/produtos/novo`
+  cadastra **novas peças já com várias cores** (cada uma com imagem, tema e estoque próprios,
+  gravadas numa única transação em `createProductWithVariants`) e permite **adicionar novas cores**
+  a peças existentes — ERP mínimo completo.
+- **Fontes da verdade já migradas para o banco:** catálogo (`Product`/`Category`/`ProductVariant`),
+  admins (`Admin`), custos (`Product.costInCents`), pedidos (`Order`/`OrderItem`) e estoque
+  (`VariantStock`). A vitrine lê `getProductsFromDb()` e as categorias vêm do banco. Sem mocks:
+  nada de `PRODUCTS`/`CATEGORIES` em código. A sacola continua em `localStorage` — é estado de navegador.
+- O frontend lê o estoque do banco via `GET /api/stock` e hidrata o cache local; confirmação de
+  pedido baixa o estoque em transação no Prisma.
+- O domínio em `src/domain/` não mudou — só os adaptadores.

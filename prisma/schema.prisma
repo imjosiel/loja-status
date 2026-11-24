@@ -1,0 +1,260 @@
+// Prisma Schema preparado para Neon.tech (Serverless PostgreSQL)
+// Para ativar futuramente:
+// 1. npm install prisma @prisma/client @neondatabase/serverless
+// 2. Configurar DATABASE_URL e DIRECT_URL do Neon no .env
+// 3. npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String
+  description String?
+  sortOrder   Int       @default(0)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Product {
+  id               String           @id @default(cuid())
+  slug             String           @unique
+  name             String
+  subtitle         String
+  heroWord         String           // Palavra monumental de fundo (ex: "CONFORTO", "LEVEZA", "FLUIDEZ")
+  description      String
+  fabricDetails    String           // Composição e toque do tecido
+  careInstructions String?
+  priceInCents     Int              // Preço atual em centavos (ex: 28900 = R$ 289,00)
+  compareAtInCents Int?             // Preço original riscado (ex: 35900 = R$ 359,00)
+  costInCents      Int              // Custo da peça — base da comissão de 10% (docs/07)
+  ncm              String?          // Opcional: só obrigatório em operação interestadual (fora do escopo)
+  featuredInHero   Boolean          @default(false)
+  heroSortOrder    Int              @default(0)
+  archivedAt       DateTime?        // arquivamento preserva pedidos, NF e comissão
+  rating           Float            @default(4.9)
+  reviewCount      Int              @default(0)
+  categoryId       String
+  category         Category         @relation(fields: [categoryId], references: [id])
+  variants         ProductVariant[]
+  orderItems       OrderItem[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+
+model ProductVariant {
+  id             String         @id @default(cuid())
+  productId      String
+  product        Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  colorName      String         // Ex: "Vinho Rosé", "Mocha Expresso"
+  colorSlug      String
+  swatchHex      String         // Cor exibida na bolinha seletora
+  cutoutImageUrl String         // PNG/WebP com fundo transparente (ghost mannequin)
+  galleryUrls    String[]       // Fotos adicionais / detalhes / lookbook
+  atmosphereBg   String         // Cor de fundo da atmosfera no Hero
+  atmosphereGlow String         // Iluminação radial atrás da peça
+  atmosphereText String         // Cor de contraste do texto sobre a atmosfera
+  isLightTheme   Boolean        @default(false)
+  sortOrder      Int            @default(0)
+  stocks         VariantStock[]
+  orderItems     OrderItem[]
+
+  @@unique([productId, colorSlug])
+}
+
+model VariantStock {
+  id        String         @id @default(cuid())
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  sizeLabel String         // Ex: "PP", "P", "M", "G" ou "36", "38", "40", "42"
+  stock     Int            @default(0)
+
+  @@unique([variantId, sizeLabel])
+}
+
+model Customer {
+  id              String   @id @default(cuid())
+  name            String
+  /** Somente dígitos — identifica a pessoa sem expor o documento na interface. */
+  cpfCnpj         String   @unique
+  phone           String?
+  email           String?
+  /** Reaproveita o cliente no Asaas em vez de criar um novo a cada cobrança. */
+  asaasCustomerId String?  @unique
+  orders          Order[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model StorageSetting {
+  id         String   @id @default(cuid())
+  limitBytes Int      @default(1073741824) // 1 GB por loja
+  updatedAt  DateTime @updatedAt
+}
+
+/** Regras de comissão ajustáveis pelo super admin (uma única linha). */
+model CommissionSetting {
+  id              String   @id @default(cuid())
+  onlineGraceDays Int      @default(7)  // CDC art. 49
+  storeGraceDays  Int      @default(7)  // loja física: a dona decide
+  commissionBps   Int      @default(1000) // 10%
+  updatedAt       DateTime @updatedAt
+  updatedByEmail  String?
+}
+
+enum CheckoutMethod {
+  PIX_GATEWAY
+  WHATSAPP
+}
+
+/** Checkout da vitrine. Desligado por padrão até homologar e configurar o gateway. */
+model CheckoutSetting {
+  id              String         @id @default(cuid())
+  pixGatewayEnabled Boolean       @default(false)
+  whatsappEnabled   Boolean       @default(true)
+  preferredMethod   CheckoutMethod @default(WHATSAPP)
+  updatedAt         DateTime      @updatedAt
+  updatedByEmail    String?
+}
+
+enum PostSaleType {
+  TROCA
+  DEVOLUCAO
+  DEFEITO
+}
+
+/** Troca/devolução por cortesia ou defeito — decisão da loja, registrada caso a caso. */
+model PostSaleEvent {
+  id                 String        @id @default(cuid())
+  orderId            String
+  order              Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type               PostSaleType
+  reason             String
+  authorizedByEmail  String
+  restock            Boolean       @default(false)
+  refunded           Boolean       @default(false)
+  commissionReversed Boolean       @default(false)
+  note               String?
+  createdAt          DateTime      @default(now())
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  isSuper   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+enum SaleChannel {
+  ONLINE
+  LOJA
+}
+
+enum PaymentMethod {
+  PIX
+  DINHEIRO
+  CARTAO
+  GATEWAY
+  OUTRO
+}
+
+enum FinancialEventType {
+  PAYMENT_RECEIVED
+  COMMISSION_PAID
+  COMMISSION_REFUNDED
+  ORDER_REFUNDED
+}
+
+enum OrderStatus {
+  DRAFT_BAG
+  SENT_TO_WHATSAPP
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  RETURNED
+  CANCELLED
+}
+
+enum CommissionStatus {
+  PENDING     // aguardando prazo de arrependimento (7 dias)
+  PAYABLE     // liberado para repasse
+  PAID        // repassado ao desenvolvedor
+  REVERSED    // pedido cancelado/devolvido dentro do prazo
+}
+
+model Order {
+  id                     String           @id @default(cuid())
+  code                   String           @unique // MS-xxxx gerado na criação, nunca derivado do subtotal
+  customerId             String?
+  customer               Customer?       @relation(fields: [customerId], references: [id])
+  customerName           String?
+  customerPhone          String?
+  notes                  String?
+  totalInCents           Int
+  status                 OrderStatus      @default(SENT_TO_WHATSAPP)
+  channel                SaleChannel      @default(ONLINE)
+  paymentMethod          PaymentMethod?
+  whatsappPayload        String?          // Mensagem enviada / sincronizada
+  confirmedAt            DateTime?
+  shippedAt              DateTime?        // quando o admin marcou como enviado
+  deliveredAt            DateTime?        // quando o admin marcou como entregue
+  cancelledAt            DateTime?
+  cancelReason           String?
+  stockRestoredAt        DateTime?        // idempotência do estorno no cancelamento
+  gatewayPaymentId       String?          // id da cobrança no Asaas (quando houver)
+  nfNumber               String?          // preenchido manualmente após emissão na NFF
+  cfop                   String           @default("5.102") // 5.101 produção própria | 5.102 revenda
+  commissionBps          Int              @default(1000)    // 10%
+  commissionInCents      Int              @default(0)
+  commissionStatus       CommissionStatus @default(PENDING)
+  commissionAvailableAt  DateTime?        // confirmedAt + 7 dias (CDC art. 49)
+  stockShortfalls        String[]         @default([])
+  items                  OrderItem[]
+  financialEvents        FinancialEvent[]
+  postSaleEvents         PostSaleEvent[]
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+}
+
+/** Repasses/estornos — hoje manuais, no futuro espelhados dos webhooks do gateway. */
+model FinancialEvent {
+  id                 String             @id @default(cuid())
+  orderId            String?
+  order              Order?             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type               FinancialEventType
+  amountInCents      Int
+  storeAmountInCents Int?
+  feeInCents         Int                @default(0)
+  occurredAt         DateTime           @default(now())
+  externalId         String?            @unique
+  receiptUrl         String?
+  note               String?
+  createdAt          DateTime           @default(now())
+
+  @@index([occurredAt])
+}
+
+model OrderItem {
+  id               String         @id @default(cuid())
+  orderId          String
+  order            Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product        @relation(fields: [productId], references: [id])
+  variantId        String
+  variant          ProductVariant @relation(fields: [variantId], references: [id])
+  sizeLabel        String
+  quantity         Int
+  productName      String
+  colorName        String
+  unitPriceInCents Int
+  unitCostInCents  Int
+}
