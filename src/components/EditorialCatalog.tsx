@@ -266,7 +266,7 @@ export function EditorialCatalog({
             ) : (
               <div>
                 <h2 className="font-serif text-4xl font-semibold tracking-[-0.02em] text-espresso sm:text-5xl">
-                  Curadoria Casual Feminina
+                  Seleção de Grandes Marcas
                 </h2>
               </div>
             )}

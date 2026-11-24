@@ -107,7 +107,6 @@ export function HeroOrbitalShowcase({
   // Wheel scroll & Mobile Touch Swipe interaction: scrolling or swiping on the garment spins the rack
   const showcaseRef = useRef<HTMLDivElement>(null);
   const wasSwipingRef = useRef(false);
-  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
     const el = showcaseRef.current;
@@ -463,8 +462,6 @@ export function HeroOrbitalShowcase({
         {/* CENTER COLUMN: Monumental Word (1.mp4) + 3D Orbital Garment Trajectory (3.mp4) */}
         <motion.div
           ref={showcaseRef}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
           className="relative z-10 order-1 flex h-[340px] items-center justify-center touch-pan-y select-none sm:h-[430px] lg:order-2 lg:col-span-5 lg:h-[540px]"
         >
           {/* Monumental Background Serif Word inspired by 1.mp4 */}
@@ -581,25 +578,6 @@ export function HeroOrbitalShowcase({
             );
           })}
 
-          {/* Interactive Wheel Scroll Badge indicator on hover */}
-          <AnimatePresence>
-            {isHovered && (
-              <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 6, scale: 0.95 }}
-                transition={{ duration: 0.18 }}
-                className="pointer-events-none absolute bottom-1 z-30 hidden items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[11px] font-semibold tracking-wide shadow-md backdrop-blur-md sm:flex"
-                style={{
-                  backgroundColor: pillSurface,
-                  border: `1px solid ${borderSubtle}`,
-                  color: activeVariant.atmosphereText,
-                }}
-              >
-                <span>↕ Role o scroll para girar a arara</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </motion.div>
 
         {/* RIGHT COLUMN: Price, Color Swatch Selector & Circular Size Selector */}
