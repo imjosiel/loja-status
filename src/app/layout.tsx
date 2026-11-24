@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Alex_Brush, Plus_Jakarta_Sans } from "next/font/google";
+import { Cormorant_Garamond, Plus_Jakarta_Sans } from "next/font/google";
 import { BagProvider } from "@/context/BagContext";
+import { MetaPixel } from "@/components/MetaPixel";
 import "./globals.css";
 
 const cormorant = Cormorant_Garamond({
@@ -8,13 +9,6 @@ const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   style: ["normal", "italic"],
-  display: "swap",
-});
-
-const alexBrush = Alex_Brush({
-  variable: "--font-alex-brush",
-  subsets: ["latin"],
-  weight: ["400"],
   display: "swap",
 });
 
@@ -26,13 +20,13 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Loja Status — Moda Casual Feminina",
+  title: "Loja Status — Grandes marcas, produtos originais",
   description:
-    "Curadoria de moda casual feminina em linho, alfaiataria leve, tricot e vestidos fluidos. Escolha seu tom e finalize com atendimento próximo.",
+    "Mais de 40 anos vestindo histórias. Grandes marcas, produtos originais e envio para todo o Brasil. Escolha sua peça e finalize com atendimento próximo.",
   openGraph: {
-    title: "Loja Status — Moda Casual Feminina",
+    title: "Loja Status — Grandes marcas, produtos originais",
     description:
-      "Alfaiataria leve, casacos estruturados, tricot e vestidos fluidos com curadoria autoral.",
+      "São Francisco de Assis · RS. Peças selecionadas, atendimento de perto e envio para todo o Brasil.",
     locale: "pt_BR",
     type: "website",
   },
@@ -44,11 +38,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="pt-BR"
-      className={`${cormorant.variable} ${alexBrush.variable} ${jakarta.variable}`}
-    >
+    <html lang="pt-BR" className={`${cormorant.variable} ${jakarta.variable}`}>
       <body className="min-h-screen bg-cream text-espresso antialiased">
+        <MetaPixel pixelId={process.env.NEXT_PUBLIC_META_PIXEL_ID ?? ""} />
         <a
           href="#conteudo-principal"
           className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-full focus:bg-espresso focus:px-5 focus:py-2.5 focus:text-sm focus:font-medium focus:text-cream"

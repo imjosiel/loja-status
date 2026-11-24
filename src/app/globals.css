@@ -21,7 +21,6 @@
   --color-rosegold: var(--accent-rosegold);
   --color-copper: var(--accent-copper);
   --font-serif: var(--font-cormorant), Georgia, serif;
-  --font-script: var(--font-alex-brush), cursive;
   --font-sans: var(--font-jakarta), system-ui, sans-serif;
 }
 
